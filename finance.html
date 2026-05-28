@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#0a0a0b">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Finances</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sync.js" defer></script>
 <script src="topbar.js" defer></script>
 <style>
 :root {
@@ -723,9 +725,10 @@ html, body { scrollbar-width: none; -ms-overflow-style: none; }
   padding: 9px 10px;
   min-width: 0;
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 .ord-input::-webkit-outer-spin-button,
-.ord-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.ord-input::-webkit-inner-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
 .ord-input::placeholder { color: var(--text-tertiary); }
 .ord-input-cost { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .ord-input-ccy, .ord-input-from {
@@ -943,9 +946,10 @@ html, body { scrollbar-width: none; -ms-overflow-style: none; }
   font-family: inherit; font-size: 14px;
   padding: 9px 12px;
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 .wish-input::-webkit-outer-spin-button,
-.wish-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.wish-input::-webkit-inner-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
 .wish-input::placeholder { color: var(--text-tertiary); }
 .wish-input-name { flex: 2; min-width: 160px; }
 .wish-input-amt  { flex: 1; min-width: 80px; max-width: 110px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -3376,5 +3380,16 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 })();
 </script>
 
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof initCloudSync !== 'function') return;
+  initCloudSync({
+    appKey: 'finance',
+    syncedKeys: ['subs', 'wishlist', 'incoming_orders', 'nw_currency', 'nw:activity', 'nw:history'],
+    syncedPrefixes: ['nw:'],
+    onApplied: function () { window.dispatchEvent(new Event('storage')); }
+  });
+});
+</script>
 </body>
 </html>
