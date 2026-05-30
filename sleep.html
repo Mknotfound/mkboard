@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#050506">
+<meta name="color-scheme" content="dark">
+<title>Sleep — mkboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sync.js" defer></script>
+<script src="topbar.js" defer></script>
+<style>
+:root {
+  --bg:#050506;--bg-card:rgba(255,255,255,0.04);--bg-secondary:rgba(255,255,255,0.035);
+  --bg-input:rgba(0,0,0,0.28);--bg-input-focus:rgba(0,0,0,0.36);
+  --border:rgba(255,255,255,0.06);--border-soft:rgba(255,255,255,0.04);--border-strong:rgba(255,255,255,0.12);
+  --text-primary:#FAFAFA;--text-secondary:#B8B6B0;--text-tertiary:#76746E;--text-quaternary:#4D4B47;
+  --accent:#7C6FCD;--accent-glow:rgba(124,111,205,0.35);--accent-dim:rgba(124,111,205,0.12);
+  --good:#6EE7B7;--good-bg:rgba(110,231,183,0.10);
+  --warn:#F59E0B;--warn-bg:rgba(245,158,11,0.10);
+  --bad:#EF4444;--bad-bg:rgba(239,68,68,0.10);
+  --font:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text-secondary);font-family:var(--font);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;}
+body{min-height:100vh;position:relative;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(60% 50% at 70% 10%,rgba(124,111,205,0.13) 0%,transparent 60%),radial-gradient(50% 40% at 20% 85%,rgba(59,130,246,0.07) 0%,transparent 60%);filter:blur(40px);pointer-events:none;z-index:0;animation:drift 38s ease-in-out infinite alternate;}
+body::after{content:'';position:fixed;inset:0;background-image:radial-gradient(rgba(255,255,255,0.014) 1px,transparent 1px);background-size:3px 3px;pointer-events:none;z-index:1;}
+@keyframes drift{0%{transform:translate(0,0);}100%{transform:translate(-2%,2%);}}
+main{position:relative;z-index:2;max-width:720px;margin:0 auto;padding:48px 16px 100px;padding-top:max(48px,env(safe-area-inset-top,48px));}
+.section-title{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-tertiary);margin:0 4px 14px;display:flex;align-items:center;gap:12px;}
+.section-title::before{content:'≡';font-size:14px;opacity:0.5;}
+.card{background:var(--bg-card);border-radius:16px;padding:20px;backdrop-filter:blur(24px) saturate(1.2);-webkit-backdrop-filter:blur(24px) saturate(1.2);box-shadow:0 12px 40px rgba(0,0,0,0.45);margin-bottom:12px;}
+.card+.section-title{margin-top:28px;}
+
+/* Hero sleep stats */
+.sleep-hero{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:0;}
+.sleep-stat{text-align:center;padding:16px 8px;background:var(--bg-secondary);border-radius:12px;border:1px solid var(--border-soft);}
+.sleep-stat-val{font-size:26px;font-weight:700;color:var(--text-primary);letter-spacing:-0.025em;font-variant-numeric:tabular-nums;line-height:1;}
+.sleep-stat-lbl{font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-tertiary);margin-top:4px;}
+
+/* Status bar */
+.status-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;font-size:12px;font-weight:500;margin-top:12px;border:1px solid transparent;}
+.status-bar.good{background:var(--good-bg);border-color:rgba(110,231,183,0.2);color:var(--good);}
+.status-bar.warn{background:var(--warn-bg);border-color:rgba(245,158,11,0.2);color:var(--warn);}
+.status-bar.bad{background:var(--bad-bg);border-color:rgba(239,68,68,0.2);color:var(--bad);}
+.status-bar.idle{background:var(--bg-secondary);border-color:var(--border);color:var(--text-tertiary);}
+.status-dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0;}
+
+/* Log form */
+.log-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.field label{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-tertiary);display:block;margin-bottom:5px;}
+.field input,.field select{width:100%;padding:10px 11px;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;color:var(--text-primary);font-family:var(--font);font-size:14px;outline:none;transition:border-color 0.15s;-webkit-appearance:none;appearance:none;}
+.field input:focus,.field select:focus{border-color:var(--accent);}
+.field select option{background:#111113;}
+.full{grid-column:1/-1;}
+.quality-row{display:flex;gap:6px;}
+.quality-btn{flex:1;padding:10px 4px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text-tertiary);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;text-align:center;transition:all 0.15s;}
+.quality-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--text-primary);}
+.save-btn{width:100%;padding:11px;background:var(--accent);border:none;border-radius:10px;color:white;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:opacity 0.15s,transform 0.1s;box-shadow:0 0 16px var(--accent-glow);}
+.save-btn:hover{opacity:0.9;}
+.save-btn:active{transform:scale(0.98);}
+
+/* 7-day chart */
+.chart-wrap{display:flex;align-items:flex-end;gap:4px;height:80px;padding:0 2px;}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.bar-fill{width:100%;border-radius:4px 4px 0 0;transition:height 0.4s cubic-bezier(0.22,1,0.36,1);min-height:2px;}
+.bar-fill.good-bar{background:var(--accent);}
+.bar-fill.warn-bar{background:var(--warn);}
+.bar-fill.bad-bar{background:var(--bad);}
+.bar-lbl{font-family:var(--font-mono);font-size:9px;color:var(--text-quaternary);text-align:center;line-height:1.2;}
+
+/* History list */
+.log-item{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 12px;border-radius:10px;background:var(--bg-secondary);margin-bottom:5px;border:1px solid transparent;}
+.log-item-date{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);font-weight:600;}
+.log-item-body{}
+.log-item-time{font-size:13px;font-weight:600;color:var(--text-primary);}
+.log-item-meta{font-family:var(--font-mono);font-size:10px;color:var(--text-tertiary);}
+.log-item-dur{font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--text-secondary);}
+.del-btn{width:26px;height:26px;background:transparent;border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-quaternary);font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.12s;}
+.del-btn:hover{background:var(--bad-bg);border-color:var(--bad);color:var(--bad);}
+
+/* Debt / readiness */
+.metric-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:0;}
+.metric-tile{padding:14px;background:var(--bg-secondary);border-radius:12px;border:1px solid var(--border-soft);}
+.metric-lbl{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:4px;}
+.metric-val{font-size:22px;font-weight:700;color:var(--text-primary);letter-spacing:-0.02em;font-variant-numeric:tabular-nums;}
+.metric-sub{font-size:11px;color:var(--text-tertiary);margin-top:2px;}
+</style>
+</head>
+<body>
+<main>
+  <div style="margin-bottom:24px;">
+    <div style="font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:4px;">mkboard</div>
+    <h1 style="margin:0;font-size:26px;font-weight:700;letter-spacing:-0.025em;background:linear-gradient(180deg,#FFFFFF 0%,#C7C4BC 120%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">Sleep</h1>
+  </div>
+
+  <div class="section-title">Last Night</div>
+  <div class="card">
+    <div class="sleep-hero">
+      <div class="sleep-stat"><div class="sleep-stat-val" id="heroHrs">—</div><div class="sleep-stat-lbl">Hours</div></div>
+      <div class="sleep-stat"><div class="sleep-stat-val" id="heroStreak">—</div><div class="sleep-stat-lbl">Streak</div></div>
+      <div class="sleep-stat"><div class="sleep-stat-val" id="heroDebt">—</div><div class="sleep-stat-lbl">Debt (hrs)</div></div>
+    </div>
+    <div class="status-bar idle" id="sleepStatus"><span class="status-dot"></span><span id="sleepStatusText">Log last night's sleep below</span></div>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Log Sleep</div>
+  <div class="card">
+    <div class="log-grid">
+      <div class="field"><label>Bedtime</label><input type="time" id="inBed" value="23:00"></div>
+      <div class="field"><label>Wake time</label><input type="time" id="inWake" value="07:00"></div>
+      <div class="field full"><label>Sleep quality</label>
+        <div class="quality-row">
+          <button class="quality-btn" data-q="1">😴 Poor</button>
+          <button class="quality-btn" data-q="2">😐 Fair</button>
+          <button class="quality-btn active" data-q="3">🙂 Good</button>
+          <button class="quality-btn" data-q="4">😊 Great</button>
+          <button class="quality-btn" data-q="5">🌟 Perfect</button>
+        </div>
+      </div>
+      <div class="field full"><label>Note (optional)</label><input type="text" id="inNote" placeholder="e.g. woke up twice, vivid dreams…"></div>
+    </div>
+    <button class="save-btn" id="saveBtn">Save Sleep Entry</button>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Last 7 Days</div>
+  <div class="card">
+    <div class="chart-wrap" id="chart"></div>
+    <div class="metric-row" style="margin-top:12px;">
+      <div class="metric-tile"><div class="metric-lbl">Weekly avg</div><div class="metric-val" id="metAvg">—</div><div class="metric-sub">hours / night</div></div>
+      <div class="metric-tile"><div class="metric-lbl">Goal</div><div class="metric-val" id="metGoal">8h</div><div class="metric-sub">recommended</div></div>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">History</div>
+  <div class="card">
+    <div id="historyList"><div style="text-align:center;padding:20px 0;color:var(--text-quaternary);font-size:13px;">No entries yet</div></div>
+  </div>
+</main>
+
+<script>
+const SLEEP_KEY = 'mkb_sleep_v1';
+const GOAL_HRS = 8;
+
+function load() { try { return JSON.parse(localStorage.getItem(SLEEP_KEY)) || []; } catch { return []; } }
+function save(entries) { localStorage.setItem(SLEEP_KEY, JSON.stringify(entries)); }
+
+function calcDuration(bed, wake) {
+  // bed and wake are "HH:MM" strings. wake might be next day.
+  const [bh, bm] = bed.split(':').map(Number);
+  const [wh, wm] = wake.split(':').map(Number);
+  let mins = (wh * 60 + wm) - (bh * 60 + bm);
+  if (mins <= 0) mins += 24 * 60; // crossed midnight
+  return mins / 60;
+}
+
+function fmtHrs(h) {
+  if (isNaN(h) || h <= 0) return '—';
+  const hh = Math.floor(h);
+  const mm = Math.round((h - hh) * 60);
+  return mm > 0 ? `${hh}h ${mm}m` : `${hh}h`;
+}
+
+function dateKey(daysAgo = 0) {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d.toISOString().slice(0, 10);
+}
+
+function shortDay(dk) {
+  const d = new Date(dk + 'T12:00:00');
+  return ['Su','Mo','Tu','We','Th','Fr','Sa'][d.getDay()];
+}
+
+let selectedQuality = 3;
+document.querySelectorAll('.quality-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    selectedQuality = parseInt(btn.dataset.q);
+    document.querySelectorAll('.quality-btn').forEach(b => b.classList.toggle('active', b === btn));
+  });
+});
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const bed = document.getElementById('inBed').value;
+  const wake = document.getElementById('inWake').value;
+  const note = document.getElementById('inNote').value.trim();
+  if (!bed || !wake) return;
+  const hrs = calcDuration(bed, wake);
+  if (hrs < 1 || hrs > 14) { alert('Check your times — duration looks off.'); return; }
+  const entries = load();
+  const today = dateKey(0);
+  // Replace if already logged today
+  const existing = entries.findIndex(e => e.date === today);
+  const entry = { date: today, bed, wake, hrs, quality: selectedQuality, note };
+  if (existing >= 0) entries[existing] = entry; else entries.unshift(entry);
+  save(entries);
+  render();
+  document.getElementById('saveBtn').textContent = '✓ Saved!';
+  setTimeout(() => document.getElementById('saveBtn').textContent = 'Save Sleep Entry', 1600);
+});
+
+function render() {
+  const entries = load();
+  // Sort newest first
+  entries.sort((a, b) => b.date.localeCompare(a.date));
+
+  // Hero — last entry
+  const last = entries[0];
+  if (last) {
+    document.getElementById('heroHrs').textContent = fmtHrs(last.hrs);
+    const statusEl = document.getElementById('sleepStatus');
+    const statusTxt = document.getElementById('sleepStatusText');
+    if (last.hrs >= GOAL_HRS) {
+      statusEl.className = 'status-bar good';
+      statusTxt.textContent = `${fmtHrs(last.hrs)} — above goal, great recovery`;
+    } else if (last.hrs >= GOAL_HRS - 1.5) {
+      statusEl.className = 'status-bar warn';
+      statusTxt.textContent = `${fmtHrs(last.hrs)} — slightly below goal (${GOAL_HRS}h)`;
+    } else {
+      statusEl.className = 'status-bar bad';
+      statusTxt.textContent = `${fmtHrs(last.hrs)} — significant deficit, prioritise rest`;
+    }
+  }
+
+  // Streak — consecutive days with ≥ goal
+  let streak = 0;
+  for (let i = 0; i < entries.length; i++) {
+    const expected = dateKey(i);
+    const e = entries.find(x => x.date === expected);
+    if (e && e.hrs >= GOAL_HRS) streak++;
+    else break;
+  }
+  document.getElementById('heroStreak').textContent = streak;
+
+  // Sleep debt — last 7 days
+  let debt = 0;
+  for (let i = 0; i < 7; i++) {
+    const dk = dateKey(i);
+    const e = entries.find(x => x.date === dk);
+    if (e) debt += Math.max(0, GOAL_HRS - e.hrs);
+  }
+  document.getElementById('heroDebt').textContent = debt > 0 ? fmtHrs(debt) : '0h';
+
+  // 7-day chart
+  const last7 = [];
+  for (let i = 6; i >= 0; i--) {
+    const dk = dateKey(i);
+    const e = entries.find(x => x.date === dk);
+    last7.push({ dk, hrs: e ? e.hrs : 0 });
+  }
+  const maxH = Math.max(GOAL_HRS + 1, ...last7.map(d => d.hrs));
+  document.getElementById('chart').innerHTML = last7.map(d => {
+    const pct = d.hrs > 0 ? Math.round((d.hrs / maxH) * 100) : 0;
+    const cls = d.hrs >= GOAL_HRS ? 'good-bar' : d.hrs >= GOAL_HRS - 1.5 ? 'warn-bar' : d.hrs > 0 ? 'bad-bar' : '';
+    return `<div class="bar-col">
+      <div class="bar-fill ${cls}" style="height:${pct}%;flex:1 0 ${pct}%;align-self:flex-end;"></div>
+      <div class="bar-lbl">${shortDay(d.dk)}<br>${d.hrs > 0 ? Math.round(d.hrs*10)/10 : '—'}</div>
+    </div>`;
+  }).join('');
+
+  // Avg
+  const daysWithData = last7.filter(d => d.hrs > 0);
+  const avg = daysWithData.length ? daysWithData.reduce((s, d) => s + d.hrs, 0) / daysWithData.length : 0;
+  document.getElementById('metAvg').textContent = avg > 0 ? fmtHrs(avg) : '—';
+
+  // Write readiness for fitness page
+  const readiness = debt === 0 ? 'good' : debt < 3 ? 'warn' : 'bad';
+  localStorage.setItem('mkb_sleep_readiness', JSON.stringify({ debt: Math.round(debt * 10) / 10, readiness, updated: new Date().toISOString() }));
+  window.dispatchEvent(new Event('storage'));
+
+  // History list
+  const hist = document.getElementById('historyList');
+  if (!entries.length) { hist.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text-quaternary);font-size:13px;">No entries yet</div>'; return; }
+  hist.innerHTML = entries.slice(0, 14).map((e, i) => {
+    const qEmoji = ['','😴','😐','🙂','😊','🌟'][e.quality] || '';
+    return `<div class="log-item">
+      <div class="log-item-date">${shortDay(e.date)}<br>${e.date.slice(5)}</div>
+      <div class="log-item-body">
+        <div class="log-item-time">${e.bed} → ${e.wake} ${qEmoji}</div>
+        <div class="log-item-meta">${e.note || ''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="log-item-dur">${fmtHrs(e.hrs)}</div>
+        <button class="del-btn" data-i="${i}" title="Delete">×</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  hist.querySelectorAll('.del-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const sorted = load().sort((a,b) => b.date.localeCompare(a.date));
+      sorted.splice(parseInt(btn.dataset.i), 1);
+      save(sorted);
+      render();
+    });
+  });
+}
+
+render();
+window.addEventListener('storage', e => { if (e.key === SLEEP_KEY) render(); });
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof initCloudSync !== 'function') return;
+  initCloudSync({
+    appKey: 'sleep',
+    syncedKeys: ['mkb_sleep_v1', 'mkb_sleep_readiness'],
+    onApplied: function () { render(); }
+  });
+});
+</script>
+</body>
+</html>

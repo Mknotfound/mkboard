@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#050506">
+<meta name="color-scheme" content="dark">
+<title>Habits — mkboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sync.js" defer></script>
+<script src="topbar.js" defer></script>
+<style>
+:root {
+  --bg:#050506;--bg-card:rgba(255,255,255,0.04);--bg-secondary:rgba(255,255,255,0.035);
+  --bg-input:rgba(0,0,0,0.28);
+  --border:rgba(255,255,255,0.06);--border-soft:rgba(255,255,255,0.04);--border-strong:rgba(255,255,255,0.12);
+  --text-primary:#FAFAFA;--text-secondary:#B8B6B0;--text-tertiary:#76746E;--text-quaternary:#4D4B47;
+  --accent:#1D9E75;--accent-glow:rgba(29,158,117,0.35);--accent-dim:rgba(29,158,117,0.12);
+  --font:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text-secondary);font-family:var(--font);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;}
+body{min-height:100vh;position:relative;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(60% 50% at 72% 10%,rgba(29,158,117,0.11) 0%,transparent 60%),radial-gradient(50% 40% at 20% 85%,rgba(110,231,183,0.06) 0%,transparent 60%);filter:blur(40px);pointer-events:none;z-index:0;animation:drift 38s ease-in-out infinite alternate;}
+body::after{content:'';position:fixed;inset:0;background-image:radial-gradient(rgba(255,255,255,0.014) 1px,transparent 1px);background-size:3px 3px;pointer-events:none;z-index:1;}
+@keyframes drift{0%{transform:translate(0,0);}100%{transform:translate(-2%,2%);}}
+main{position:relative;z-index:2;max-width:720px;margin:0 auto;padding:48px 16px 100px;padding-top:max(48px,env(safe-area-inset-top,48px));}
+.section-title{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-tertiary);margin:0 4px 14px;display:flex;align-items:center;gap:12px;}
+.section-title::before{content:'≡';font-size:14px;opacity:0.5;}
+.card{background:var(--bg-card);border-radius:16px;padding:20px;backdrop-filter:blur(24px) saturate(1.2);-webkit-backdrop-filter:blur(24px) saturate(1.2);box-shadow:0 12px 40px rgba(0,0,0,0.45);margin-bottom:12px;}
+.card+.section-title{margin-top:28px;}
+
+/* Progress bar */
+.day-progress{margin-bottom:4px;}
+.day-prog-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+.day-prog-label{font-size:13px;font-weight:600;color:var(--text-primary);}
+.day-prog-count{font-family:var(--font-mono);font-size:12px;color:var(--text-tertiary);}
+.prog-track{height:5px;background:rgba(255,255,255,0.05);border-radius:99px;overflow:hidden;}
+.prog-fill{height:100%;background:var(--accent);border-radius:99px;transition:width 0.4s cubic-bezier(0.22,1,0.36,1);}
+
+/* Habit item */
+.habit-item{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:12px 14px;border-radius:12px;background:var(--bg-secondary);margin-bottom:7px;border:1px solid transparent;transition:all 0.2s;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.habit-item.done{background:rgba(29,158,117,0.08);border-color:rgba(29,158,117,0.18);}
+.habit-check{width:36px;height:36px;border-radius:50%;border:2px solid var(--border-strong);background:var(--bg-card);display:flex;align-items:center;justify-content:center;font-size:16px;color:transparent;transition:all 0.2s;flex-shrink:0;}
+.habit-item.done .habit-check{background:var(--accent);border-color:var(--accent);color:white;box-shadow:0 0 12px var(--accent-glow);}
+.habit-body{}
+.habit-name{font-size:14px;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:8px;}
+.habit-item.done .habit-name{text-decoration:line-through;color:var(--text-tertiary);}
+.habit-streak{font-family:var(--font-mono);font-size:10px;color:var(--text-tertiary);}
+.habit-streak-num{color:var(--accent);font-weight:700;}
+.habit-actions{display:flex;gap:6px;}
+.habit-del{width:28px;height:28px;background:transparent;border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-quaternary);font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.12s;}
+.habit-del:hover{background:rgba(239,68,68,0.1);border-color:#EF4444;color:#EF4444;}
+
+/* Add form */
+.add-row{display:flex;gap:8px;margin-top:14px;}
+.add-input{flex:1;padding:10px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;color:var(--text-primary);font-family:var(--font);font-size:14px;outline:none;transition:border-color 0.15s;}
+.add-input:focus{border-color:var(--accent);}
+.add-input::placeholder{color:var(--text-quaternary);}
+.add-emoji{width:44px;padding:10px;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;color:var(--text-primary);font-size:18px;text-align:center;outline:none;cursor:pointer;}
+.add-btn{padding:10px 16px;background:var(--accent);border:none;border-radius:10px;color:white;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:all 0.15s;box-shadow:0 0 12px var(--accent-glow);}
+.add-btn:hover{opacity:0.9;}
+.add-btn:active{transform:scale(0.97);}
+
+/* Weekly grid */
+.week-grid-wrap{overflow-x:auto;}
+.week-grid{display:grid;gap:6px;min-width:320px;}
+.week-row{display:grid;grid-template-columns:120px repeat(7,1fr);gap:4px;align-items:center;}
+.week-row-lbl{font-size:12px;font-weight:600;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.week-day-lbl{font-family:var(--font-mono);font-size:9px;color:var(--text-quaternary);text-align:center;}
+.week-cell{width:100%;aspect-ratio:1;border-radius:5px;background:rgba(255,255,255,0.04);}
+.week-cell.done-cell{background:var(--accent);}
+.week-cell.today-cell{box-shadow:inset 0 0 0 1px rgba(255,255,255,0.2);}
+</style>
+</head>
+<body>
+<main>
+  <div style="margin-bottom:24px;">
+    <div style="font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:4px;">mkboard</div>
+    <h1 style="margin:0;font-size:26px;font-weight:700;letter-spacing:-0.025em;background:linear-gradient(180deg,#FFFFFF 0%,#C7C4BC 120%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">Habits</h1>
+  </div>
+
+  <div class="section-title">Today</div>
+  <div class="card">
+    <div class="day-progress">
+      <div class="day-prog-row">
+        <span class="day-prog-label" id="progLabel">0 of 0 done</span>
+        <span class="day-prog-count" id="progDate"></span>
+      </div>
+      <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+    </div>
+    <div style="margin-top:14px;" id="habitList"></div>
+    <div class="add-row">
+      <input type="text" id="emojiInput" class="add-emoji" value="✅" maxlength="2">
+      <input type="text" id="habitNameInput" class="add-input" placeholder="New habit…" maxlength="48">
+      <button class="add-btn" id="addHabitBtn">Add</button>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Last 7 Days</div>
+  <div class="card">
+    <div class="week-grid-wrap">
+      <div class="week-grid" id="weekGrid"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const HABITS_KEY = 'mkb_habits_v1';
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(HABITS_KEY)) || { habits: [], logs: {} }; }
+  catch { return { habits: [], logs: {} }; }
+}
+function save(d) { localStorage.setItem(HABITS_KEY, JSON.stringify(d)); }
+
+function dateKey(daysAgo = 0) {
+  const d = new Date(); d.setDate(d.getDate() - daysAgo);
+  return d.toISOString().slice(0, 10);
+}
+
+function getCompletedToday(data, habitId) {
+  const today = dateKey(0);
+  return !!(data.logs[today] && data.logs[today][habitId]);
+}
+
+function calcStreak(data, habitId) {
+  let streak = 0;
+  for (let i = 0; i < 365; i++) {
+    const dk = dateKey(i);
+    if (data.logs[dk] && data.logs[dk][habitId]) streak++;
+    else if (i > 0) break;
+  }
+  return streak;
+}
+
+function toggleHabit(habitId) {
+  const d = load();
+  const today = dateKey(0);
+  if (!d.logs[today]) d.logs[today] = {};
+  d.logs[today][habitId] = !d.logs[today][habitId];
+  if (!d.logs[today][habitId]) delete d.logs[today][habitId];
+  save(d);
+  render();
+}
+
+document.getElementById('addHabitBtn').addEventListener('click', addHabit);
+document.getElementById('habitNameInput').addEventListener('keydown', e => { if (e.key === 'Enter') addHabit(); });
+
+function addHabit() {
+  const name = document.getElementById('habitNameInput').value.trim();
+  const emoji = document.getElementById('emojiInput').value.trim() || '✅';
+  if (!name) return;
+  const d = load();
+  d.habits.push({ id: 'h_' + Date.now(), name, emoji });
+  save(d);
+  document.getElementById('habitNameInput').value = '';
+  render();
+}
+
+function render() {
+  const d = load();
+  const today = dateKey(0);
+  const todayLogs = d.logs[today] || {};
+  const total = d.habits.length;
+  const done = d.habits.filter(h => todayLogs[h.id]).length;
+
+  // Progress
+  document.getElementById('progLabel').textContent = `${done} of ${total} done`;
+  document.getElementById('progDate').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' });
+  document.getElementById('progFill').style.width = total ? `${(done / total) * 100}%` : '0%';
+
+  // Habit list
+  const list = document.getElementById('habitList');
+  if (!d.habits.length) {
+    list.innerHTML = '<div style="text-align:center;padding:16px 0;color:var(--text-quaternary);font-size:13px;">Add your first habit above</div>';
+  } else {
+    list.innerHTML = d.habits.map(h => {
+      const isDone = !!todayLogs[h.id];
+      const streak = calcStreak(d, h.id);
+      return `<div class="habit-item${isDone ? ' done' : ''}" data-id="${h.id}">
+        <div class="habit-check">${isDone ? '✓' : ''}</div>
+        <div class="habit-body">
+          <div class="habit-name">${h.emoji} ${h.name}</div>
+          <div class="habit-streak">Streak: <span class="habit-streak-num">${streak}</span> day${streak !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="habit-actions" onclick="event.stopPropagation()">
+          <button class="habit-del" data-del="${h.id}" title="Delete">×</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    list.querySelectorAll('.habit-item').forEach(el => {
+      el.addEventListener('click', (e) => { if (!e.target.closest('.habit-actions')) toggleHabit(el.dataset.id); });
+    });
+    list.querySelectorAll('.habit-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!confirm('Delete this habit?')) return;
+        const dd = load();
+        dd.habits = dd.habits.filter(h => h.id !== btn.dataset.del);
+        save(dd);
+        render();
+      });
+    });
+  }
+
+  // Weekly grid
+  const days = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  const last7 = Array.from({ length: 7 }, (_, i) => {
+    const dd = new Date(); dd.setDate(dd.getDate() - (6 - i));
+    return { dk: dd.toISOString().slice(0, 10), label: days[dd.getDay()], isToday: i === 6 };
+  });
+
+  const grid = document.getElementById('weekGrid');
+  // Header row
+  const header = '<div class="week-row">' +
+    '<div class="week-row-lbl" style="color:var(--text-quaternary);font-size:10px;font-family:var(--font-mono);">HABIT</div>' +
+    last7.map(x => `<div class="week-day-lbl">${x.label}</div>`).join('') +
+    '</div>';
+  const rows = d.habits.map(h =>
+    '<div class="week-row">' +
+    `<div class="week-row-lbl" title="${h.name}">${h.emoji} ${h.name}</div>` +
+    last7.map(x => {
+      const isDone = d.logs[x.dk] && d.logs[x.dk][h.id];
+      return `<div class="week-cell${isDone ? ' done-cell' : ''}${x.isToday ? ' today-cell' : ''}"></div>`;
+    }).join('') +
+    '</div>'
+  ).join('');
+  grid.innerHTML = header + (d.habits.length ? rows : '<div style="color:var(--text-quaternary);font-size:12px;padding:8px 0;">No habits yet</div>');
+}
+
+render();
+window.addEventListener('storage', e => { if (e.key === HABITS_KEY) render(); });
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof initCloudSync !== 'function') return;
+  initCloudSync({
+    appKey: 'habits',
+    syncedKeys: ['mkb_habits_v1'],
+    onApplied: function () { render(); }
+  });
+});
+</script>
+</body>
+</html>

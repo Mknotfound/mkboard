@@ -93,13 +93,13 @@
 .bottombar-tab {
   flex: 1;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px; padding: 6px 0 4px; text-decoration: none;
+  gap: 2px; padding: 5px 0 4px; text-decoration: none;
   color: rgba(255, 255, 255, 0.45);
-  font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  font-size: 9px; font-weight: 600; letter-spacing: 0.02em;
   -webkit-tap-highlight-color: transparent; transition: color 0.15s;
 }
 .bottombar-tab-icon {
-  font-size: 24px; line-height: 1;
+  font-size: 20px; line-height: 1;
   filter: grayscale(100%) brightness(1.2); opacity: 0.55;
   transition: opacity 0.15s, filter 0.15s, transform 0.10s;
 }
@@ -176,6 +176,18 @@ body.topbar-modal-open { overflow: hidden; touch-action: none; }
   <a href="calories.html" class="bottombar-tab" data-page="nutrition">
     <span class="bottombar-tab-icon">🥗</span><span>Nutrition</span>
   </a>
+  <a href="sleep.html" class="bottombar-tab" data-page="sleep">
+    <span class="bottombar-tab-icon">🌙</span><span>Sleep</span>
+  </a>
+  <a href="study.html" class="bottombar-tab" data-page="study">
+    <span class="bottombar-tab-icon">📚</span><span>Study</span>
+  </a>
+  <a href="habits.html" class="bottombar-tab" data-page="habits">
+    <span class="bottombar-tab-icon">✅</span><span>Habits</span>
+  </a>
+  <a href="body.html" class="bottombar-tab" data-page="body">
+    <span class="bottombar-tab-icon">⚖️</span><span>Body</span>
+  </a>
 </nav>`;
 
   function isFinancePage() {
@@ -191,6 +203,10 @@ body.topbar-modal-open { overflow: hidden; touch-action: none; }
     if (p.endsWith('health.html')) return 'health';
     if (p.endsWith('gym.html')) return 'fitness';
     if (p.endsWith('calories.html')) return 'nutrition';
+    if (p.endsWith('sleep.html')) return 'sleep';
+    if (p.endsWith('study.html')) return 'study';
+    if (p.endsWith('habits.html')) return 'habits';
+    if (p.endsWith('body.html')) return 'body';
     return 'main';
   }
 

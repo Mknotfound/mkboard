@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#050506">
+<meta name="color-scheme" content="dark">
+<title>Body — mkboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sync.js" defer></script>
+<script src="topbar.js" defer></script>
+<style>
+:root {
+  --bg:#050506;--bg-card:rgba(255,255,255,0.04);--bg-secondary:rgba(255,255,255,0.035);
+  --bg-input:rgba(0,0,0,0.28);
+  --border:rgba(255,255,255,0.06);--border-soft:rgba(255,255,255,0.04);--border-strong:rgba(255,255,255,0.12);
+  --text-primary:#FAFAFA;--text-secondary:#B8B6B0;--text-tertiary:#76746E;--text-quaternary:#4D4B47;
+  --accent:#5B9CF6;--accent-glow:rgba(91,156,246,0.35);--accent-dim:rgba(91,156,246,0.12);
+  --good:#6EE7B7;--good-bg:rgba(110,231,183,0.10);
+  --warn:#F59E0B;--warn-bg:rgba(245,158,11,0.10);
+  --font:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text-secondary);font-family:var(--font);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;}
+body{min-height:100vh;position:relative;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(60% 50% at 70% 8%,rgba(91,156,246,0.10) 0%,transparent 60%),radial-gradient(50% 40% at 18% 88%,rgba(110,231,183,0.06) 0%,transparent 60%);filter:blur(40px);pointer-events:none;z-index:0;animation:drift 38s ease-in-out infinite alternate;}
+body::after{content:'';position:fixed;inset:0;background-image:radial-gradient(rgba(255,255,255,0.014) 1px,transparent 1px);background-size:3px 3px;pointer-events:none;z-index:1;}
+@keyframes drift{0%{transform:translate(0,0);}100%{transform:translate(-2%,2%);}}
+main{position:relative;z-index:2;max-width:720px;margin:0 auto;padding:48px 16px 100px;padding-top:max(48px,env(safe-area-inset-top,48px));}
+.section-title{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-tertiary);margin:0 4px 14px;display:flex;align-items:center;gap:12px;}
+.section-title::before{content:'≡';font-size:14px;opacity:0.5;}
+.card{background:var(--bg-card);border-radius:16px;padding:20px;backdrop-filter:blur(24px) saturate(1.2);-webkit-backdrop-filter:blur(24px) saturate(1.2);box-shadow:0 12px 40px rgba(0,0,0,0.45);margin-bottom:12px;}
+.card+.section-title{margin-top:28px;}
+
+/* Metrics hero */
+.metrics-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.metric-tile{padding:14px 10px;background:var(--bg-secondary);border-radius:12px;border:1px solid var(--border-soft);text-align:center;}
+.metric-val{font-size:22px;font-weight:700;color:var(--text-primary);letter-spacing:-0.02em;font-variant-numeric:tabular-nums;line-height:1;}
+.metric-lbl{font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-tertiary);margin-top:4px;}
+.metric-delta{font-family:var(--font-mono);font-size:11px;margin-top:2px;font-weight:600;}
+.metric-delta.up{color:#EF4444;}.metric-delta.down{color:var(--good);}.metric-delta.flat{color:var(--text-quaternary);}
+
+/* Form */
+.log-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.field label{font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-tertiary);display:block;margin-bottom:5px;}
+.field input,.field select{width:100%;padding:10px 11px;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;color:var(--text-primary);font-family:var(--font);font-size:14px;outline:none;transition:border-color 0.15s;-webkit-appearance:none;appearance:none;}
+.field input:focus,.field select:focus{border-color:var(--accent);}
+.save-btn{width:100%;padding:11px;background:var(--accent);border:none;border-radius:10px;color:white;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:all 0.15s;box-shadow:0 0 16px var(--accent-glow);}
+.save-btn:hover{opacity:0.9;}
+.save-btn:active{transform:scale(0.98);}
+
+/* Sparkline chart */
+.chart-outer{position:relative;height:80px;margin-top:4px;}
+.chart-svg{width:100%;height:100%;overflow:visible;}
+
+/* History */
+.log-row{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:9px 12px;border-radius:10px;background:var(--bg-secondary);margin-bottom:5px;}
+.log-date{font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);}
+.log-vals{font-size:13px;font-weight:600;color:var(--text-primary);}
+.log-vals span{font-weight:400;color:var(--text-tertiary);font-size:12px;margin-left:4px;}
+.log-note{font-size:11px;color:var(--text-quaternary);}
+.del-btn{width:26px;height:26px;background:transparent;border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-quaternary);font-size:14px;display:flex;align-items:center;justify-content:center;transition:all 0.12s;}
+.del-btn:hover{background:rgba(239,68,68,0.1);border-color:#EF4444;color:#EF4444;}
+</style>
+</head>
+<body>
+<main>
+  <div style="margin-bottom:24px;">
+    <div style="font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:4px;">mkboard</div>
+    <h1 style="margin:0;font-size:26px;font-weight:700;letter-spacing:-0.025em;background:linear-gradient(180deg,#FFFFFF 0%,#C7C4BC 120%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">Body</h1>
+  </div>
+
+  <div class="section-title">Current</div>
+  <div class="card">
+    <div class="metrics-grid">
+      <div class="metric-tile"><div class="metric-val" id="curWeight">—</div><div class="metric-lbl">Weight (kg)</div><div class="metric-delta flat" id="weightDelta">—</div></div>
+      <div class="metric-tile"><div class="metric-val" id="curBF">—</div><div class="metric-lbl">Body fat %</div><div class="metric-delta flat" id="bfDelta">—</div></div>
+      <div class="metric-tile"><div class="metric-val" id="curBMI">—</div><div class="metric-lbl">BMI</div><div class="metric-delta flat" id="bmiCat">—</div></div>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Weight Trend</div>
+  <div class="card">
+    <div class="chart-outer"><svg class="chart-svg" id="weightChart" viewBox="0 0 400 80" preserveAspectRatio="none"></svg></div>
+    <div style="display:flex;justify-content:space-between;margin-top:6px;font-family:var(--font-mono);font-size:10px;color:var(--text-quaternary);" id="chartLabels"></div>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Log Entry</div>
+  <div class="card">
+    <div class="log-grid">
+      <div class="field"><label>Weight (kg)</label><input type="number" id="inWeight" placeholder="70.0" step="0.1" min="20" max="300"></div>
+      <div class="field"><label>Body fat % <span style="font-weight:400;text-transform:none;">(optional)</span></label><input type="number" id="inBF" placeholder="18.5" step="0.1" min="1" max="60"></div>
+      <div class="field" style="grid-column:1/-1"><label>Note (optional)</label><input type="text" id="inNote" placeholder="e.g. morning, post-workout…"></div>
+    </div>
+    <button class="save-btn" id="saveBtn">Log Entry</button>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">History</div>
+  <div class="card"><div id="historyList"><div style="text-align:center;padding:16px 0;color:var(--text-quaternary);font-size:13px;">No entries yet</div></div></div>
+</main>
+
+<script>
+const BODY_KEY = 'mkb_body_v1';
+const NUTRITION_PROFILE_KEY = 'mkb_nutrition_profile';
+
+function load() { try { return JSON.parse(localStorage.getItem(BODY_KEY)) || []; } catch { return []; } }
+function save(entries) { localStorage.setItem(BODY_KEY, JSON.stringify(entries)); }
+
+function calcBMI(w, h) { if (!w || !h) return null; return w / ((h / 100) ** 2); }
+function bmiCat(bmi) {
+  if (!bmi) return { label:'—', cls:'flat' };
+  if (bmi < 18.5) return { label:'Underweight', cls:'down' };
+  if (bmi < 25)   return { label:'Normal', cls:'flat' };
+  if (bmi < 30)   return { label:'Overweight', cls:'up' };
+  return { label:'Obese', cls:'up' };
+}
+function fmtDate(dk) {
+  const d = new Date(dk + 'T12:00:00');
+  return d.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+}
+
+// Get height from nutrition profile
+function getHeight() {
+  try { const p = JSON.parse(localStorage.getItem(NUTRITION_PROFILE_KEY)); return p && p.height ? parseFloat(p.height) : null; }
+  catch { return null; }
+}
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const w = parseFloat(document.getElementById('inWeight').value);
+  const bf = parseFloat(document.getElementById('inBF').value) || null;
+  const note = document.getElementById('inNote').value.trim();
+  if (!w || w < 20 || w > 300) { alert('Enter a valid weight.'); return; }
+  const entries = load();
+  const today = new Date().toISOString().slice(0, 10);
+  const existing = entries.findIndex(e => e.date === today);
+  const entry = { date: today, weight: w, bf, note, ts: Date.now() };
+  if (existing >= 0) entries[existing] = entry; else entries.unshift(entry);
+  save(entries);
+
+  // Push weight back to nutrition profile so TDEE recalculates
+  try {
+    const prof = JSON.parse(localStorage.getItem(NUTRITION_PROFILE_KEY)) || {};
+    prof.weight = w;
+    localStorage.setItem(NUTRITION_PROFILE_KEY, JSON.stringify(prof));
+  } catch {}
+
+  render();
+  document.getElementById('saveBtn').textContent = '✓ Saved!';
+  setTimeout(() => document.getElementById('saveBtn').textContent = 'Log Entry', 1600);
+  document.getElementById('inWeight').value = '';
+  document.getElementById('inBF').value = '';
+  document.getElementById('inNote').value = '';
+});
+
+function render() {
+  const entries = load().sort((a, b) => b.date.localeCompare(a.date));
+  const height = getHeight();
+
+  // Hero
+  if (entries.length) {
+    const cur = entries[0];
+    const prev = entries[1];
+    document.getElementById('curWeight').textContent = cur.weight.toFixed(1);
+    document.getElementById('curBF').textContent = cur.bf != null ? cur.bf.toFixed(1) + '%' : '—';
+
+    // Weight delta
+    if (prev) {
+      const wDiff = (cur.weight - prev.weight).toFixed(1);
+      const wEl = document.getElementById('weightDelta');
+      wEl.textContent = (wDiff > 0 ? '+' : '') + wDiff + ' kg';
+      wEl.className = 'metric-delta ' + (wDiff > 0 ? 'up' : wDiff < 0 ? 'down' : 'flat');
+      if (cur.bf != null && prev.bf != null) {
+        const bfDiff = (cur.bf - prev.bf).toFixed(1);
+        const bfEl = document.getElementById('bfDelta');
+        bfEl.textContent = (bfDiff > 0 ? '+' : '') + bfDiff + '%';
+        bfEl.className = 'metric-delta ' + (bfDiff > 0 ? 'up' : bfDiff < 0 ? 'down' : 'flat');
+      } else { document.getElementById('bfDelta').textContent = '—'; }
+    } else {
+      document.getElementById('weightDelta').textContent = 'First entry';
+      document.getElementById('weightDelta').className = 'metric-delta flat';
+    }
+
+    // BMI
+    const bmi = calcBMI(cur.weight, height);
+    const cat = bmiCat(bmi);
+    document.getElementById('curBMI').textContent = bmi ? bmi.toFixed(1) : height ? '—' : 'Set height\nin Nutrition';
+    const bmiEl = document.getElementById('bmiCat');
+    bmiEl.textContent = cat.label;
+    bmiEl.className = 'metric-delta ' + cat.cls;
+  } else {
+    ['curWeight','curBF','curBMI'].forEach(id => document.getElementById(id).textContent = '—');
+    ['weightDelta','bfDelta','bmiCat'].forEach(id => { document.getElementById(id).textContent = '—'; document.getElementById(id).className = 'metric-delta flat'; });
+  }
+
+  // Weight chart — last 30 entries
+  const chart30 = entries.slice(0, 30).reverse();
+  const svg = document.getElementById('weightChart');
+  const labelsEl = document.getElementById('chartLabels');
+  if (chart30.length >= 2) {
+    const weights = chart30.map(e => e.weight);
+    const minW = Math.min(...weights) - 0.5;
+    const maxW = Math.max(...weights) + 0.5;
+    const pts = chart30.map((e, i) => {
+      const x = (i / (chart30.length - 1)) * 400;
+      const y = 80 - ((e.weight - minW) / (maxW - minW)) * 72 - 4;
+      return `${x},${y}`;
+    }).join(' ');
+    const areaD = `M ${pts.replace(/,/g, ' ').split(' ').map((v,i,arr) => i === 0 ? `M ${v} ${arr[1]}` : '').join('')}`;
+    // Polyline + area fill
+    svg.innerHTML = `
+      <defs><linearGradient id="wGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5B9CF6" stop-opacity="0.35"/><stop offset="100%" stop-color="#5B9CF6" stop-opacity="0"/></linearGradient></defs>
+      <polygon points="${pts} 400,80 0,80" fill="url(#wGrad)"/>
+      <polyline points="${pts}" fill="none" stroke="#5B9CF6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      ${chart30.map((e, i) => {
+        const x = (i / (chart30.length - 1)) * 400;
+        const y = 80 - ((e.weight - minW) / (maxW - minW)) * 72 - 4;
+        return `<circle cx="${x}" cy="${y}" r="3" fill="#5B9CF6"/>`;
+      }).join('')}
+    `;
+    // Labels — first, mid, last
+    const show = [chart30[0], chart30[Math.floor(chart30.length/2)], chart30[chart30.length-1]];
+    labelsEl.innerHTML = show.map(e => `<span>${fmtDate(e.date)}</span>`).join('');
+  } else {
+    svg.innerHTML = '<text x="200" y="44" text-anchor="middle" fill="rgba(255,255,255,0.15)" font-size="12" font-family="ui-monospace,monospace">Log 2+ entries to see trend</text>';
+    labelsEl.innerHTML = '';
+  }
+
+  // History list
+  const hist = document.getElementById('historyList');
+  if (!entries.length) { hist.innerHTML = '<div style="text-align:center;padding:16px 0;color:var(--text-quaternary);font-size:13px;">No entries yet</div>'; return; }
+  hist.innerHTML = entries.slice(0, 20).map((e, i) => {
+    const bmi = height ? calcBMI(e.weight, height) : null;
+    return `<div class="log-row">
+      <div class="log-date">${fmtDate(e.date)}</div>
+      <div>
+        <div class="log-vals">${e.weight} kg${e.bf != null ? ` · ${e.bf}% BF` : ''}${bmi ? ` · BMI ${bmi.toFixed(1)}` : ''}</div>
+        ${e.note ? `<div class="log-note">${e.note}</div>` : ''}
+      </div>
+      <button class="del-btn" data-i="${i}" title="Delete">×</button>
+    </div>`;
+  }).join('');
+
+  hist.querySelectorAll('.del-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const sorted = load().sort((a, b) => b.date.localeCompare(a.date));
+      sorted.splice(parseInt(btn.dataset.i), 1);
+      save(sorted);
+      render();
+    });
+  });
+}
+
+render();
+window.addEventListener('storage', e => { if (e.key === BODY_KEY || e.key === NUTRITION_PROFILE_KEY) render(); });
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof initCloudSync !== 'function') return;
+  initCloudSync({
+    appKey: 'body',
+    syncedKeys: ['mkb_body_v1'],
+    onApplied: function () { render(); }
+  });
+});
+</script>
+</body>
+</html>

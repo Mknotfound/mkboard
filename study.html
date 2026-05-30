@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#050506">
+<meta name="color-scheme" content="dark">
+<title>Study — mkboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sync.js" defer></script>
+<script src="topbar.js" defer></script>
+<style>
+:root {
+  --bg:#050506;--bg-card:rgba(255,255,255,0.04);--bg-secondary:rgba(255,255,255,0.035);
+  --bg-input:rgba(0,0,0,0.28);
+  --border:rgba(255,255,255,0.06);--border-soft:rgba(255,255,255,0.04);--border-strong:rgba(255,255,255,0.12);
+  --text-primary:#FAFAFA;--text-secondary:#B8B6B0;--text-tertiary:#76746E;--text-quaternary:#4D4B47;
+  --accent:#E8A838;--accent-glow:rgba(232,168,56,0.35);--accent-dim:rgba(232,168,56,0.12);
+  --good:#6EE7B7;--good-bg:rgba(110,231,183,0.10);
+  --warn:#F59E0B;--warn-bg:rgba(245,158,11,0.10);
+  --bad:#EF4444;--bad-bg:rgba(239,68,68,0.10);
+  --font:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text-secondary);font-family:var(--font);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;}
+body{min-height:100vh;position:relative;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(60% 50% at 75% 8%,rgba(232,168,56,0.10) 0%,transparent 60%),radial-gradient(50% 40% at 20% 88%,rgba(110,231,183,0.06) 0%,transparent 60%);filter:blur(40px);pointer-events:none;z-index:0;animation:drift 38s ease-in-out infinite alternate;}
+body::after{content:'';position:fixed;inset:0;background-image:radial-gradient(rgba(255,255,255,0.014) 1px,transparent 1px);background-size:3px 3px;pointer-events:none;z-index:1;}
+@keyframes drift{0%{transform:translate(0,0);}100%{transform:translate(-2%,2%);}}
+main{position:relative;z-index:2;max-width:720px;margin:0 auto;padding:48px 16px 100px;padding-top:max(48px,env(safe-area-inset-top,48px));}
+.section-title{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-tertiary);margin:0 4px 14px;display:flex;align-items:center;gap:12px;}
+.section-title::before{content:'≡';font-size:14px;opacity:0.5;}
+.card{background:var(--bg-card);border-radius:16px;padding:20px;backdrop-filter:blur(24px) saturate(1.2);-webkit-backdrop-filter:blur(24px) saturate(1.2);box-shadow:0 12px 40px rgba(0,0,0,0.45);margin-bottom:12px;}
+.card+.section-title{margin-top:28px;}
+
+/* Stats row */
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.stat-tile{text-align:center;padding:14px 8px;background:var(--bg-secondary);border-radius:12px;border:1px solid var(--border-soft);}
+.stat-val{font-size:24px;font-weight:700;color:var(--text-primary);letter-spacing:-0.025em;font-variant-numeric:tabular-nums;line-height:1;}
+.stat-lbl{font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-tertiary);margin-top:4px;}
+
+/* Pomodoro timer */
+.timer-wrap{display:flex;flex-direction:column;align-items:center;padding:8px 0 4px;}
+.timer-display{font-size:64px;font-weight:700;letter-spacing:-0.04em;color:var(--text-primary);font-variant-numeric:tabular-nums;line-height:1;font-family:var(--font-mono);}
+.timer-display.break-mode{color:var(--good);}
+.timer-sub{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-tertiary);margin-top:6px;margin-bottom:16px;}
+.timer-controls{display:flex;gap:10px;align-items:center;}
+.timer-btn{padding:10px 28px;border-radius:10px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:all 0.15s;border:none;}
+.timer-btn.primary{background:var(--accent);color:#0a0a0b;box-shadow:0 0 16px var(--accent-glow);}
+.timer-btn.primary:hover{opacity:0.9;}
+.timer-btn.secondary{background:var(--bg-secondary);border:1px solid var(--border-strong);color:var(--text-secondary);}
+.timer-btn.secondary:hover{color:var(--text-primary);}
+.timer-btn:active{transform:scale(0.96);}
+.pomo-dots{display:flex;gap:6px;margin-top:14px;}
+.pomo-dot{width:8px;height:8px;border-radius:50%;background:var(--border-strong);transition:background 0.2s;}
+.pomo-dot.done{background:var(--accent);}
+
+/* Subject selector */
+.subject-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+.subject-chip{padding:6px 12px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid var(--border-strong);background:transparent;color:var(--text-tertiary);cursor:pointer;transition:all 0.15s;font-family:var(--font);}
+.subject-chip.active{background:var(--accent-dim);border-color:var(--accent);color:var(--text-primary);}
+.subject-chip:hover{color:var(--text-secondary);}
+.add-subject-wrap{display:flex;gap:8px;margin-top:8px;}
+.add-subject-input{flex:1;padding:8px 11px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-family:var(--font);font-size:13px;outline:none;}
+.add-subject-input:focus{border-color:var(--accent);}
+.add-subject-btn{padding:8px 14px;background:var(--bg-secondary);border:1px solid var(--border-strong);border-radius:8px;color:var(--text-secondary);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;}
+.add-subject-btn:hover{color:var(--text-primary);}
+
+/* Heatmap */
+.heatmap{display:flex;flex-wrap:wrap;gap:3px;}
+.hm-cell{width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,0.05);}
+.hm-cell.l1{background:rgba(232,168,56,0.25);}
+.hm-cell.l2{background:rgba(232,168,56,0.50);}
+.hm-cell.l3{background:rgba(232,168,56,0.75);}
+.hm-cell.l4{background:rgba(232,168,56,1);}
+.hm-legend{display:flex;align-items:center;gap:4px;margin-top:8px;font-family:var(--font-mono);font-size:10px;color:var(--text-quaternary);}
+.hm-legend-cell{width:11px;height:11px;border-radius:2px;}
+
+/* Session log */
+.session-item{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:10px;background:var(--bg-secondary);margin-bottom:5px;}
+.session-left{}
+.session-subj{font-size:13px;font-weight:600;color:var(--text-primary);}
+.session-meta{font-family:var(--font-mono);font-size:10px;color:var(--text-tertiary);}
+.session-dur{font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--text-secondary);}
+</style>
+</head>
+<body>
+<main>
+  <div style="margin-bottom:24px;">
+    <div style="font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:4px;">mkboard</div>
+    <h1 style="margin:0;font-size:26px;font-weight:700;letter-spacing:-0.025em;background:linear-gradient(180deg,#FFFFFF 0%,#C7C4BC 120%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">Study</h1>
+  </div>
+
+  <div class="section-title">Today</div>
+  <div class="card">
+    <div class="stats-row">
+      <div class="stat-tile"><div class="stat-val" id="statToday">0h</div><div class="stat-lbl">Today</div></div>
+      <div class="stat-tile"><div class="stat-val" id="statStreak">0</div><div class="stat-lbl">Day streak</div></div>
+      <div class="stat-tile"><div class="stat-val" id="statWeek">0h</div><div class="stat-lbl">This week</div></div>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Pomodoro</div>
+  <div class="card">
+    <div style="margin-bottom:14px;">
+      <div style="font-family:var(--font-mono);font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:8px;">Subject</div>
+      <div class="subject-row" id="subjectRow"></div>
+      <div class="add-subject-wrap">
+        <input class="add-subject-input" id="newSubjectInput" placeholder="Add subject…" maxlength="32">
+        <button class="add-subject-btn" id="addSubjectBtn">Add</button>
+      </div>
+    </div>
+    <div class="timer-wrap">
+      <div class="timer-display" id="timerDisplay">25:00</div>
+      <div class="timer-sub" id="timerSub">Focus session</div>
+      <div class="timer-controls">
+        <button class="timer-btn secondary" id="resetBtn">Reset</button>
+        <button class="timer-btn primary" id="startBtn">Start</button>
+      </div>
+      <div class="pomo-dots" id="pomoDots"></div>
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Activity — 5 Weeks</div>
+  <div class="card">
+    <div class="heatmap" id="heatmap"></div>
+    <div class="hm-legend">
+      Less <div class="hm-legend-cell" style="background:rgba(255,255,255,0.05)"></div>
+      <div class="hm-legend-cell" style="background:rgba(232,168,56,0.25)"></div>
+      <div class="hm-legend-cell" style="background:rgba(232,168,56,0.5)"></div>
+      <div class="hm-legend-cell" style="background:rgba(232,168,56,0.75)"></div>
+      <div class="hm-legend-cell" style="background:rgba(232,168,56,1)"></div> More
+    </div>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Today's Sessions</div>
+  <div class="card"><div id="sessionList"><div style="text-align:center;padding:16px 0;color:var(--text-quaternary);font-size:13px;">No sessions yet today</div></div></div>
+</main>
+
+<script>
+const STUDY_KEY = 'mkb_study_v1';
+
+function load() { try { return JSON.parse(localStorage.getItem(STUDY_KEY)) || { subjects: ['Maths', 'Physics', 'English'], sessions: [] }; } catch { return { subjects: ['Maths', 'Physics', 'English'], sessions: [] }; } }
+function save(d) { localStorage.setItem(STUDY_KEY, JSON.stringify(d)); }
+
+function dateKey(d = new Date()) { return d.toISOString().slice(0, 10); }
+function fmtMins(m) {
+  if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60), rm = m % 60;
+  return rm ? `${h}h ${rm}m` : `${h}h`;
+}
+
+let selectedSubject = null;
+function renderSubjects() {
+  const d = load();
+  if (!selectedSubject || !d.subjects.includes(selectedSubject)) selectedSubject = d.subjects[0] || null;
+  document.getElementById('subjectRow').innerHTML = d.subjects.map(s =>
+    `<button class="subject-chip${s === selectedSubject ? ' active' : ''}" data-s="${s}">${s}</button>`
+  ).join('');
+  document.querySelectorAll('.subject-chip').forEach(btn => {
+    btn.addEventListener('click', () => { selectedSubject = btn.dataset.s; renderSubjects(); });
+  });
+}
+
+document.getElementById('addSubjectBtn').addEventListener('click', () => {
+  const val = document.getElementById('newSubjectInput').value.trim();
+  if (!val) return;
+  const d = load();
+  if (!d.subjects.includes(val)) { d.subjects.push(val); save(d); }
+  selectedSubject = val;
+  document.getElementById('newSubjectInput').value = '';
+  renderSubjects();
+  renderStats();
+});
+document.getElementById('newSubjectInput').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('addSubjectBtn').click(); });
+
+// ===== POMODORO TIMER =====
+const FOCUS_MINS = 25, BREAK_MINS = 5;
+let timerState = 'idle'; // idle | running | break
+let timerSecs = FOCUS_MINS * 60;
+let timerInterval = null;
+let pomoCount = 0;
+let sessionStart = null;
+
+function fmtTimer(s) {
+  const m = Math.floor(s / 60), ss = s % 60;
+  return String(m).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+}
+
+function updateTimerUI() {
+  const disp = document.getElementById('timerDisplay');
+  const sub = document.getElementById('timerSub');
+  const startBtn = document.getElementById('startBtn');
+  disp.textContent = fmtTimer(timerSecs);
+  disp.className = 'timer-display' + (timerState === 'break' ? ' break-mode' : '');
+  sub.textContent = timerState === 'break' ? `Break (${BREAK_MINS}m)` : 'Focus session';
+  startBtn.textContent = timerState === 'running' ? 'Pause' : timerState === 'break' ? 'Skip break' : 'Start';
+  const dots = document.getElementById('pomoDots');
+  dots.innerHTML = Array.from({ length: 4 }, (_, i) => `<div class="pomo-dot${i < pomoCount % 4 || (pomoCount > 0 && pomoCount % 4 === 0) ? ' done' : ''}"></div>`).join('');
+}
+
+document.getElementById('startBtn').addEventListener('click', () => {
+  if (timerState === 'idle') {
+    timerState = 'running';
+    sessionStart = Date.now();
+    timerInterval = setInterval(tick, 1000);
+  } else if (timerState === 'running') {
+    clearInterval(timerInterval);
+    // Save partial session
+    const mins = Math.round((Date.now() - sessionStart) / 60000);
+    if (mins >= 1) logSession(mins);
+    timerState = 'idle';
+    timerSecs = FOCUS_MINS * 60;
+    sessionStart = null;
+  } else if (timerState === 'break') {
+    clearInterval(timerInterval);
+    timerState = 'idle';
+    timerSecs = FOCUS_MINS * 60;
+  }
+  updateTimerUI();
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  clearInterval(timerInterval);
+  if (timerState === 'running' && sessionStart) {
+    const mins = Math.round((Date.now() - sessionStart) / 60000);
+    if (mins >= 1) logSession(mins);
+  }
+  timerState = 'idle'; timerSecs = FOCUS_MINS * 60; sessionStart = null;
+  updateTimerUI();
+});
+
+function tick() {
+  timerSecs--;
+  if (timerSecs <= 0) {
+    if (timerState === 'running') {
+      // Pomodoro complete
+      logSession(FOCUS_MINS);
+      pomoCount++;
+      timerState = 'break';
+      timerSecs = BREAK_MINS * 60;
+      sessionStart = null;
+      try { new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAA').play(); } catch {}
+    } else {
+      // Break complete
+      timerState = 'idle';
+      timerSecs = FOCUS_MINS * 60;
+    }
+  }
+  updateTimerUI();
+}
+
+function logSession(mins) {
+  if (!selectedSubject) return;
+  const d = load();
+  d.sessions.push({ date: dateKey(), subject: selectedSubject, mins, ts: Date.now() });
+  save(d);
+  renderStats();
+}
+
+// ===== STATS =====
+function renderStats() {
+  const d = load();
+  const today = dateKey();
+  const todaySessions = d.sessions.filter(s => s.date === today);
+  const todayMins = todaySessions.reduce((a, s) => a + s.mins, 0);
+  document.getElementById('statToday').textContent = fmtMins(todayMins);
+
+  // Streak
+  let streak = 0;
+  for (let i = 0; i < 365; i++) {
+    const dk = dateKey(new Date(Date.now() - i * 86400000));
+    if (d.sessions.some(s => s.date === dk)) streak++;
+    else if (i > 0) break;
+  }
+  document.getElementById('statStreak').textContent = streak;
+
+  // Week
+  const weekMins = [0,1,2,3,4,5,6].reduce((a, i) => {
+    const dk = dateKey(new Date(Date.now() - i * 86400000));
+    return a + d.sessions.filter(s => s.date === dk).reduce((b, s) => b + s.mins, 0);
+  }, 0);
+  document.getElementById('statWeek').textContent = fmtMins(weekMins);
+
+  // Heatmap — 35 days
+  const hm = document.getElementById('heatmap');
+  const cells = [];
+  for (let i = 34; i >= 0; i--) {
+    const dk = dateKey(new Date(Date.now() - i * 86400000));
+    const mins = d.sessions.filter(s => s.date === dk).reduce((a, s) => a + s.mins, 0);
+    const lvl = mins === 0 ? 0 : mins < 30 ? 1 : mins < 60 ? 2 : mins < 120 ? 3 : 4;
+    cells.push(`<div class="hm-cell${lvl ? ' l' + lvl : ''}" title="${dk}: ${fmtMins(mins)}"></div>`);
+  }
+  hm.innerHTML = cells.join('');
+
+  // Today's session list
+  const list = document.getElementById('sessionList');
+  if (!todaySessions.length) {
+    list.innerHTML = '<div style="text-align:center;padding:16px 0;color:var(--text-quaternary);font-size:13px;">No sessions yet today</div>';
+  } else {
+    list.innerHTML = [...todaySessions].reverse().map(s => {
+      const t = new Date(s.ts);
+      const time = t.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      return `<div class="session-item">
+        <div class="session-left">
+          <div class="session-subj">${s.subject}</div>
+          <div class="session-meta">${time}</div>
+        </div>
+        <div class="session-dur">${fmtMins(s.mins)}</div>
+      </div>`;
+    }).join('');
+  }
+}
+
+renderSubjects();
+renderStats();
+updateTimerUI();
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof initCloudSync !== 'function') return;
+  initCloudSync({
+    appKey: 'study',
+    syncedKeys: ['mkb_study_v1'],
+    onApplied: function () { renderSubjects(); renderStats(); }
+  });
+});
+</script>
+</body>
+</html>
