@@ -866,6 +866,19 @@ function saveTodayLog(entries) {
 }
 
 // ============================================================
+//  GYM SYNC — read calories burned written by gym.html
+// ============================================================
+function getGymBurned() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('mkb_gym_burned'));
+    if (!raw) return 0;
+    // Only use today's data
+    if (raw.date !== todayKey()) return 0;
+    return parseInt(raw.kcal, 10) || 0;
+  } catch { return 0; }
+}
+
+// ============================================================
 //  CALCULATIONS
 // ============================================================
 function calcBMI(weightKg, heightCm) {
@@ -940,6 +953,7 @@ function renderToday() {
 
   // Total eaten
   const totalKcal = Math.round(entries.reduce((s, e) => s + e.kcal, 0));
+  const burnedKcal = getGymBurned();
 
   // Calorie ring
   const ringFill = document.getElementById('calorieRingFill');
@@ -958,8 +972,10 @@ function renderToday() {
     calGoalEl.textContent = goal;
     consumedEl.textContent = totalKcal;
 
-    const remaining = goal - totalKcal;
-    const progress = Math.min(1, totalKcal / goal);
+    // Net remaining = goal + burned - eaten (exercise earns you more budget)
+    const netGoal = goal + burnedKcal;
+    const remaining = netGoal - totalKcal;
+    const progress = Math.min(1, totalKcal / netGoal);
     const circumference = 2 * Math.PI * 70; // r=70
     const offset = circumference * (1 - progress);
 
@@ -973,27 +989,31 @@ function renderToday() {
       ringFill.classList.add('over');
       statusEl.className = 'status-bar over';
       statusText.textContent = `${Math.abs(remaining)} kcal over goal — dial back your next meal`;
-    } else if (remaining < goal * 0.15) {
+    } else if (remaining < netGoal * 0.15) {
       ringRemaining.textContent = remaining;
       ringRemaining.className = 'ring-remaining';
       ringSub.textContent = 'kcal left';
       ringFill.classList.remove('over');
       statusEl.className = 'status-bar warn';
-      statusText.textContent = `Almost at goal — ${remaining} kcal remaining`;
+      statusText.textContent = `Almost at goal — ${remaining} kcal remaining${burnedKcal > 0 ? ' (incl. ' + burnedKcal + ' burned)' : ''}`;
     } else if (totalKcal === 0) {
-      ringRemaining.textContent = goal;
+      ringRemaining.textContent = netGoal;
       ringRemaining.className = 'ring-remaining';
       ringSub.textContent = 'kcal left';
       ringFill.classList.remove('over');
       statusEl.className = 'status-bar idle';
-      statusText.textContent = `Daily goal: ${goal} kcal — start logging your meals`;
+      statusText.textContent = burnedKcal > 0
+        ? `Goal ${goal} kcal + ${burnedKcal} burned = ${netGoal} kcal budget`
+        : `Daily goal: ${goal} kcal — start logging your meals`;
     } else {
       ringRemaining.textContent = remaining;
       ringRemaining.className = 'ring-remaining';
       ringSub.textContent = 'kcal left';
       ringFill.classList.remove('over');
       statusEl.className = 'status-bar good';
-      statusText.textContent = `${remaining} kcal remaining — you're on track`;
+      statusText.textContent = burnedKcal > 0
+        ? `${remaining} kcal left · workout earned +${burnedKcal} kcal`
+        : `${remaining} kcal remaining — you're on track`;
     }
   } else {
     ringRemaining.textContent = '—';
@@ -1005,6 +1025,7 @@ function renderToday() {
   }
 
   consumedEl.textContent = totalKcal;
+  document.getElementById('statBurned').textContent = burnedKcal || 0;
 
   // Log list
   const listEl = document.getElementById('foodLogList');
@@ -1364,6 +1385,21 @@ document.getElementById('clearDayBtn').addEventListener('click', () => {
 // ============================================================
 renderToday();
 renderBMI(savedProfile);
+
+// ============================================================
+//  LIVE SYNC — refresh when gym.html writes burned calories
+//  (works cross-tab via storage event, and on focus/visibility
+//   change for same-tab navigation)
+// ============================================================
+window.addEventListener('storage', (e) => {
+  if (e.key === 'mkb_gym_burned' || e.key === null) {
+    renderToday();
+  }
+});
+window.addEventListener('focus', renderToday);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) renderToday();
+});
 </script>
 </body>
 </html>

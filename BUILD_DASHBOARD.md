@@ -8,7 +8,8 @@ The file has four components stacked vertically: a **Page title** at the very to
 
 ## Visual style (whole file)
 
-- Dark theme. Page background `#050506` with two soft radial washes layered on top: a warm orange wash `rgba(224, 118, 88, 0.16)` at 82% across / 14% down, and a cool grey wash `rgba(180, 180, 200, 0.06)` at 18% across / 90% down. Both blurred 40px and slowly drifting via a 36s alternating animation.
+- Dark theme. Page background `#050506` with two soft radial washes layered on top: a warm purple wash `rgba(118, 88, 0.16)` at 82% across / 14% down, and a cool grey wash `rgba(101, 16, 97, 0.2)
+` at 18% across / 90% down. Both blurred 40px and slowly drifting via a 36s alternating animation.
 - A second `body::after` layer adds a tiny film-grain dot pattern (3px × 3px tile, white at ~1.4% opacity) so the dark never looks plastic.
 - Body font: Apple system stack — `-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif`. Mono font (used for numbers, times, dates): `ui-monospace, "SF Mono", Menlo, Consolas, monospace`.
 - Text colors as CSS variables: `--text-primary: #FAFAFA`, `--text-secondary: #B8B6B0`, `--text-tertiary: #76746E`.

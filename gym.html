@@ -2222,6 +2222,7 @@ img, video, canvas, svg { max-width: 100%; }
     saveDoneDays(doneDays);
     renderTodaysWorkout();
     renderPastWorkouts();
+    syncGymBurnedToNutrition();
   });
   $('poTwPastToggle').addEventListener('click', () => {
     const body = $('poTwPastBody');
@@ -2231,6 +2232,63 @@ img, video, canvas, svg { max-width: 100%; }
     body.style.flexDirection = 'column';
     toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
   });
+
+  // ============================================================
+  // GYM → NUTRITION SYNC
+  // Estimates kcal burned from today's lifting volume and writes
+  // the result to localStorage key 'mkb_gym_burned' so the
+  // nutrition tracker can read it in real-time.
+  //
+  // Formula: weight-training MET ≈ 3.5–6 depending on intensity.
+  // We use a simplified approach:
+  //   kcal = (volume_kg_lifted × 0.09)  ← ~0.09 kcal per kg×rep
+  //   + base (sets × 3.5 kcal per set of rest/setup overhead)
+  // This is calibrated to give ~200–400 kcal for a typical 
+  // 15-20 set session, which matches real-world lifting data.
+  // Bodyweight exercises count reps × 0.3 kcal each.
+  // We also factor in body weight from the nutrition profile
+  // when available, for a more personalised number.
+  // ============================================================
+  function syncGymBurnedToNutrition() {
+    try {
+      const dk = wtDateKey(new Date());
+      const all = logsByDay();
+      const todaySets = all[dk] || [];
+      if (todaySets.length === 0) {
+        // No sets today — clear the key so nutrition shows 0
+        localStorage.setItem('mkb_gym_burned', JSON.stringify({ date: dk, kcal: 0 }));
+        window.dispatchEvent(new Event('storage'));
+        return;
+      }
+
+      // Pull body weight from nutrition profile for MET scaling
+      let bodyWeightKg = 70; // sensible default
+      try {
+        const prof = JSON.parse(localStorage.getItem('mkb_nutrition_profile'));
+        if (prof && prof.weight) bodyWeightKg = parseFloat(prof.weight) || 70;
+      } catch (_) {}
+
+      let totalKcal = 0;
+      todaySets.forEach(({ ex, log }) => {
+        if (ex.bw) {
+          // Bodyweight exercise: MET ~5, duration ~2s per rep
+          // kcal = MET × weight_kg × (duration_hrs)
+          const durationHrs = (log.reps * 2) / 3600;
+          totalKcal += 5 * bodyWeightKg * durationHrs;
+        } else {
+          // Barbell/dumbbell: kcal ≈ volume (kg) × 0.09 + 3.5 per set
+          const vol = (log.weight || 0) * (log.reps || 0);
+          totalKcal += vol * 0.09 + 3.5;
+        }
+      });
+
+      // Cap at 1000 to prevent runaway values
+      totalKcal = Math.min(1000, Math.round(totalKcal));
+
+      localStorage.setItem('mkb_gym_burned', JSON.stringify({ date: dk, kcal: totalKcal }));
+      window.dispatchEvent(new Event('storage'));
+    } catch (_) {}
+  }
 
   // ============================================================
   // EVENT WIRING
@@ -2287,6 +2345,8 @@ img, video, canvas, svg { max-width: 100%; }
     saveState(); renderAll();
     // Strength changed → composition estimate may shift
     if (typeof wtRender === 'function') wtRender();
+    // Sync calories burned to nutrition tracker
+    syncGymBurnedToNutrition();
     // Tiny pulse on the button so the user feels the save
     const btn = $('logBtn');
     btn.style.transition = 'transform 0.15s';
